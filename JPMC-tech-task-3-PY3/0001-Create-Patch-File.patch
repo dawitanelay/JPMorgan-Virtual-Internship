@@ -1,0 +1,151 @@
+From 4f3becd8ae658854479d9b56e176c1ef65e27810 Mon Sep 17 00:00:00 2001
+From: Dawit Mezemir Anelay <dawitmezemir@gmial.com>
+Date: Thu, 11 Feb 2021 18:32:39 +0100
+Subject: [PATCH] Create Patch File
+
+---
+ src/App.css            |  4 ++--
+ src/DataManipulator.ts | 36 +++++++++++++++++++++++++-----------
+ src/Graph.css          |  1 +
+ src/Graph.tsx          | 28 +++++++++++++++++-----------
+ 4 files changed, 45 insertions(+), 24 deletions(-)
+
+diff --git a/src/App.css b/src/App.css
+index 1a8747a..f963d5b 100755
+--- a/src/App.css
++++ b/src/App.css
+@@ -34,8 +34,8 @@
+ }
+ 
+ .Graph {
+-  min-height: 50vh;
+-  width: 700px;
++  min-height: 70vh;
++  width: 800px;
+   margin-bottom: 12px;
+ }
+ 
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index f6b15ff..f5ea9a9 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -1,20 +1,34 @@
+ import { ServerRespond } from './DataStreamer';
+ 
+ export interface Row {
+-  stock: string,
+-  top_ask_price: number,
++  price_abc: number,
++  price_def: number,
++  ratio: number,
+   timestamp: Date,
++  upper_bound: number,
++  lower_bound: number,
++  trigger_alert: number | undefined
+ }
+ 
+ 
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]): Row[] {
+-    return serverResponds.map((el: any) => {
+-      return {
+-        stock: el.stock,
+-        top_ask_price: el.top_ask && el.top_ask.price || 0,
+-        timestamp: el.timestamp,
+-      };
+-    })
++  static generateRow(serverResponds: ServerRespond[]): Row {
++    const priceABC = (serverResponds[0].top_ask.price + serverResponds[0].top_bid.price)/2;
++    const priceDEF = (serverResponds[1].top_ask.price + serverResponds[1].top_bid.price)/2;
++    const ratio = priceABC / priceDEF;
++    const upper_bound = 1 + 0.08;
++    const lower_bound = 1 - 0.08;
++    return {
++      price_abc: priceABC,
++      price_def: priceDEF,
++      ratio,
++      timestamp: serverResponds[0].timestamp > serverResponds[1].timestamp ?
++                  serverResponds[0].timestamp : serverResponds[1].timestamp,
++      upper_bound: upper_bound,
++      lower_bound: lower_bound,
++      trigger_alert: (ratio > upper_bound || ratio < lower_bound ) ? ratio : undefined, 
++
++
++    };
+   }
+-}
++} 
+\ No newline at end of file
+diff --git a/src/Graph.css b/src/Graph.css
+index c77c560..65902b3 100644
+--- a/src/Graph.css
++++ b/src/Graph.css
+@@ -1,4 +1,5 @@
+ perspective-viewer {
+   height: 50vh;
+   width: 700px;
++
+ }
+\ No newline at end of file
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 58fb997..625eb0c 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -23,11 +23,14 @@ class Graph extends Component<IProps, {}> {
+     const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
+ 
+     const schema = {
+-      stock: 'string',
+-      top_ask_price: 'float',
+-      top_bid_price: 'float',
++      price_abc: 'float',
++      price_def: 'float',
++      ratio: 'float',
+       timestamp: 'date',
+-    };
++      upper_bound: 'float',
++      lower_bound: 'float',
++      trigger_alert: 'float'
++    };  
+ 
+     if (window.perspective && window.perspective.worker()) {
+       this.table = window.perspective.worker().table(schema);
+@@ -36,25 +39,28 @@ class Graph extends Component<IProps, {}> {
+       // Load the `table` in the `<perspective-viewer>` DOM reference.
+       elem.load(this.table);
+       elem.setAttribute('view', 'y_line');
+-      elem.setAttribute('column-pivots', '["stock"]');
+       elem.setAttribute('row-pivots', '["timestamp"]');
+-      elem.setAttribute('columns', '["top_ask_price"]');
++      elem.setAttribute('columns', '["ratio", "lower_bound", "upper_bound", "trigger_alert"]')
+       elem.setAttribute('aggregates', JSON.stringify({
+-        stock: 'distinctcount',
+-        top_ask_price: 'avg',
+-        top_bid_price: 'avg',
++        price_abc: 'avg',
++        price_def: 'avg',
++        ratio:'avg',
+         timestamp: 'distinct count',
++        upper_bound: 'avg',
++        lower_bound: 'avg',
++        trigger_alert: 'avg',
+       }));
+     }
+   }
+ 
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update(
++      this.table.update([
+         DataManipulator.generateRow(this.props.data),
+-      );
++      ]);
+     }
+   }
++  
+ }
+ 
+ export default Graph;
+-- 
+2.25.1
+
